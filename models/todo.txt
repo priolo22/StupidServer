@@ -1,0 +1,2 @@
+fare in maniera che la funzionalità "loadDB" all'interno di "core/ModelDB.php" possa ricevere in input il parametro dell' oggetto da caricare insieme a quello principale
+cioe' tocca fare un joint per caricare anche l'oggetto secondario attaccato

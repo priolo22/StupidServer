@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<HTML>
+    <HEAD>
+        <meta charset="utf-8">
+        <title>Test functions</title>
+        <!--script src="//code.jquery.com/jquery-1.10.2.js"></script-->
+        <script src="../js/jquery/jquery-1.10.2.js"></script>
+    </HEAD>
+
+    <BODY>
+        <LABEL>DebugMode (display sql): </LABEL>
+        <BR/>
+        <INPUT type="checkbox" id="chkDebug"/>
+        <BR/><BR/>
+        <LABEL>Url: </LABEL>
+        <BR/>
+        <select id="cmbUrl">
+           
+            <option>--- TEST ---</option>
+            <option value="">dispatcher.php?url=test</option>
+            <option value="100">dispatcher.php?url=service.ee.queue.register</option>
+            <option value="101">dispatcher.php?url=service.ee.queue.unregister</option>
+            <option value="102">dispatcher.php?url=service.ee.queue.push</option>
+             
+            <option>--- Service Client ---</option>
+            <option value="0">dispatcher.php?url=select/ServiceClientDB</option>
+            <option value="">dispatcher.php?url=similar/ServiceClient</option>
+            <option value="3">dispatcher.php?url=load/ServiceClient</option>
+            <option value="1">dispatcher.php?url=update/ServiceClient</option>
+            <option value="2">dispatcher.php?url=del/ServiceClient</option>
+            
+            
+            <option>--- Service ---</option>
+            <option value="4">dispatcher.php?url=select/ServiceDB</option>
+            <option value="">dispatcher.php?url=similar/Service</option>
+            <option value="7">dispatcher.php?url=load/Service</option>
+            <option value="5">dispatcher.php?url=update/Service</option>
+            <option value="6">dispatcher.php?url=del/Service</option>
+            
+            
+            <option>--- Client ---</option>
+            <option value="8">dispatcher.php?url=select/ClientDB</option>
+            <option value="">dispatcher.php?url=similar/Client</option>
+            <option value="11">dispatcher.php?url=load/Client</option>
+            <option value="9">dispatcher.php?url=update/Client</option>
+            <option value="10">dispatcher.php?url=del/Client</option>
+            
+            
+        </select>
+        <BR/><BR/>
+        <LABEL>Parameters: </LABEL>
+        <BR/>
+        <TEXTAREA id="txtInput" cols="80"></TEXTAREA>
+        <BR/><BR/>
+        <INPUT id="bttSend" type="button" value="Send" />
+        <BR/><BR/>
+        <LABEL>Response: </LABEL>
+        <BR/>
+        <!--DIV id="divResponse"></DIV-->
+        <TEXTAREA id="divResponse" rows="20" cols="80"></TEXTAREA>
+        <script>
+            $(document).ready(function() {
+
+                // PREMO IL BOTTONE SEND
+                $("#bttSend").bind("click",function(){
+                    
+                    $.post(
+                            
+                        // url
+                        "./"+$("#cmbUrl option:selected").text()
+                        
+                        // parametro
+                        //, { param:$.trim($("#txtInput").val()), 
+                        //   debug:$("#chkDebug").is(':checked')
+                        //}
+                        , $.trim($("#txtInput").val())
+                        
+                        // callback di risposta
+                        , function (data){
+                            $("#divResponse").val(data);
+                        }
+                        , "text"
+                                
+                    // errore
+                    ).error(function(e) { 
+                        alert(e.statusText); 
+                    });
+            
+                });
+                
+                
+                $( "#cmbUrl" ).change(function() {
+                    
+                    switch ( $(this).val() ) {
+                        
+                        case "100":
+                            $("#txtInput").val('{"client":{"id":2},"service":{"id":1}}');
+                        break;
+                        case "101":
+                        break;
+                        case "102":
+                        break;
+                        
+                        
+                        // load
+                        case "0":
+                            $("#txtInput").val("");
+                        break;
+                        // update
+                        case "1":
+                            $("#txtInput").val('{"id":3,"client":{"id":2},"service":{"id":1},"position":5}');
+                        break;
+                        // delete
+                        case "2":
+                            $("#txtInput").val('{"id":3}');
+                        break;
+                        // load
+                        case "3":
+                            $("#txtInput").val('{"id":1}');
+                        break;
+                        
+                        
+                        // load
+                        case "4":
+                            $("#txtInput").val("");
+                        break;
+                        // update
+                        case "5":
+                            $("#txtInput").val('{"id":3,"name":"services test","latitude":45,"longitude":34}');
+                        break;
+                        // delete
+                        case "6":
+                            $("#txtInput").val('{"id":3}');
+                        break;
+                        // load
+                        case "7":
+                            $("#txtInput").val('{"id":1}');
+                        break;
+                        
+                        // load
+                        case "8":
+                            $("#txtInput").val("");
+                        break;
+                        // update
+                        case "9":
+                            $("#txtInput").val('{"id":3,"gcm_id":"ABCDEFGHULMNOPQRSTUVZ12345"}');
+                        break;
+                        // delete
+                        case "10":
+                            $("#txtInput").val('{"id":3}');
+                        break;
+                        // load
+                        case "11":
+                            $("#txtInput").val('{"id":1}');
+                        break;
+                    }
+                });
+                
+            });
+        </script>
+    </BODY>
+
+</HTML>
