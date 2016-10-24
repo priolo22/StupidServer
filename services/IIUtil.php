@@ -66,4 +66,63 @@ class IIUtil {
 	return $xml;
     }
     
+    
+    
+    
+    
+    
+    
+    /**
+     * Restituisce tutto l'albero completo di una directory
+     * @param type $dir
+     * @return type
+     */
+    public static function DirToArray($dir, $recursive=TRUE) {
+        $result = array(); 
+        $cdir = scandir($dir); 
+        foreach ($cdir as $key => $fileName) { 
+            if (in_array($fileName,array(".",".."))==TRUE) continue;
+            $pathName = $dir . DIRECTORY_SEPARATOR . $fileName;
+                
+            if (is_dir($pathName)) { 
+                $result[$fileName] = $recursive? IIUtil::DirToArray($pathName) : "<dir>"; 
+            } else { 
+                $result[] = $fileName; 
+            } 
+        } 
+        return $result; 
+    } 
+    
+    public static function DirDelete ($dirname, $withThis=true) {
+        if (file_exists($dirname)==false) throw ( new Exception("IIUtil::DirDelete::no_file"));
+        if (is_file($dirname)==true) return unlink($dirname);
+        
+        $files = scandir($dirname);
+        foreach ($files as $fileName) { 
+            if (in_array($fileName,array(".",".."))==true) continue;
+            $pathName = $dirname . DIRECTORY_SEPARATOR . $fileName;
+            
+            IIUtil::DirDelete($pathName);
+        }
+        return $withThis==true? rmdir($dirname): true;
+    }
+
+
+    // Function to Copy folders and files       
+    public static function DirCopy($src, $dst) {
+        if (file_exists ( $dst )) IIUtil::DirDelete ( $dst );
+        
+        if (is_dir ( $src )) {
+            if ( mkdir ( $dst ) === false ) throw new Exception ("IIUtil::DirCopy::eror_mkdir");
+            $files = scandir ( $src );
+            foreach ( $files as $file )
+                if ($file != "." && $file != "..")
+                    IIUtil::DirCopy ( "$src/$file", "$dst/$file" );
+                
+        } else if (file_exists ( $src )) {
+            if ( copy ( $src, $dst ) === false ) throw new Exception ("IIUtil::DirCopy::eror_copy");
+        }
+    }
+    
+    
 }

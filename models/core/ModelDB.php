@@ -15,6 +15,17 @@ require_once 'Collection.php';
 
 class ModelDB extends ModelCore {
     
+    // CONST //
+    
+    const QUERY_TYPE_UNKNOW = 0;
+    const QUERY_TYPE_NOTHING = 1;
+    const QUERY_TYPE_SELECT = 2;
+    const QUERY_TYPE_INSERT = 3;
+    const QUERY_TYPE_UPDATE = 4;
+    const QUERY_TYPE_DELETE = 5;
+    
+    // CONST //
+    
     
     
     // STATIC //
@@ -28,18 +39,17 @@ class ModelDB extends ModelCore {
      */
     public static function GetTable() {}
    
-    
-    
-    /**
-     * Restituisce un "CollectionSql" che permette di prelevare oggetti dal db 
-     * a partire dalla tabella gestita da questo "controller"
-     * @return Collection
-     */
-    public function GetCollection () {
-        return new Collection($this);
-    }
-   
     // END STATIC //
+    
+    
+    // PROPERTIES //
+    
+    // indica il tipo di query che si sta facendo in questo momento
+    public $queryType = ModelDB::QUERY_TYPE_NOTHING;
+    
+    // PROPERTIES //
+    
+   
     
     
     
@@ -56,6 +66,15 @@ class ModelDB extends ModelCore {
     // METHODS //
     
     /**
+     * Restituisce un "CollectionSql" che permette di prelevare oggetti dal db 
+     * a partire dalla tabella gestita da questo "controller"
+     * @return Collection
+     */
+    public function getCollection () {
+        return new Collection($this);
+    }    
+    
+    /**
      * restituisce tutti i nomi(db!) delle proprieta' divise con la virgola.
      * Per esempio: 
      * city,name,surname
@@ -64,6 +83,7 @@ class ModelDB extends ModelCore {
      * @param type $show_key
      * @return string
      */
+    /*
     public static function GetFieldsName ( $show_key=FALSE ) {
         $fields = static::GetFields();
         $sql_fields = "";
@@ -79,7 +99,7 @@ class ModelDB extends ModelCore {
         
         return $sql_fields;
     }
-    
+    */
     
     
     /**
@@ -95,9 +115,16 @@ class ModelDB extends ModelCore {
     public function getFieldsName2 ( $show_key=FALSE ) {
         $fields = static::GetFields();
         $sql_fields = "";
+        
+        // ciclo tutti i field
         foreach ( $fields as $field ) {
-            if ( $field->is_set($this->obj)==FALSE ) continue;
-            if ( !empty($sql_fields) ) $sql_fields .= ",";
+            // 
+            if ( $field->is_set($this->obj)==FALSE && $field->type!=Field::TYPE_TIMESTAMP_CREATION ){
+                continue;
+            }
+            if ( !empty($sql_fields) ) {
+                $sql_fields .= ",";
+            }
             $sql_fields .= $field->name;
         }
         
@@ -176,10 +203,26 @@ class ModelDB extends ModelCore {
     public function getFieldsValue ( $show_key=FALSE ) {
         $fields = static::GetFields();
         $sql_value = "";
+        $value;
+        
+        // ciclo tutte le proprietà
         foreach ( $fields as $field ) {
-            if ( $field->is_set($this->obj)==FALSE ) continue;
+            
+            // se è una query di INSERT e del tipo TYPE_TIMESTAMP_CREATION ci metto la data di ora.
+            if ( $this->queryType==ModelDB::QUERY_TYPE_INSERT && $field->type==Field::TYPE_TIMESTAMP_CREATION ) {
+                $value = "NOW()";
+                
+            // ... se è un altro tipo
+            } else {
+                // se la proprietà non è settata allora non fare nulla....
+                if ( $field->is_set($this->obj)==FALSE ) continue;
+                // ... altrimenti inserisci il valore.
+                $value = $field->sql_value($this->obj);
+            }
+            
+            // se non è il primo inserimento nella stringa sql allora ci metto la virgola
             if ( strlen($sql_value)>0 ) $sql_value .= ",";
-            $sql_value .= $field->sql_value($this->obj);
+            $sql_value .= $value;
         }
      
         if ( $show_key === TRUE ) {
@@ -199,6 +242,7 @@ class ModelDB extends ModelCore {
      * 
      * @return string
      */
+    /*
     public function getFieldsAssign () {
         $fields = static::GetFields();
         $sql_value = "";
@@ -210,18 +254,35 @@ class ModelDB extends ModelCore {
         }
         return $sql_value;
     }
-    
+    */
     /**
      * Restituisce una stringa del tipo:
      * client.city="bologna",client.name="Mario",client.surname="Rossi"
      * 
+     * @param string $div è la stringa da mettere tra un campo e l'altro (p.e. " AND " oppure " OR " oppure ",")
+     * @param array $fields_to_get indica i campi che devono essere considerati, se null o vuota considera tutti i campi.
      * @return string
      */
-    public function getFieldsAssign2 ( $div ) {
+    public function getFieldsAssign2 ( $div, $fields_to_get ) {
         $fields = static::GetFields();
         $sql_value = "";
         foreach ( $fields as $field ) {
-            if ( $field->is_set($this->obj) ) {
+            
+            // se il campo è di tipo timestamp creation 
+            // salto il giro perche' questa funzione non viene usata dall INSERT
+            if ( $field->type==Field::TYPE_TIMESTAMP_CREATION ) {
+                continue;
+            }
+            
+            // se il campo è settato, cioe' ha un valore oppure, se l'array $fields non è vuoto e ha dentro il nome del campo...
+            // allora inserisco il campo nell SQL.
+            if ( $field->is_set($this->obj) 
+                 && ( 
+                    empty($fields_to_get) 
+                        || 
+                    (!empty($fields_to_get) && in_array($field->propertyName, $fields_to_get))
+                 )
+            ) {
                 if ( !empty($sql_value) ) $sql_value .= $div;
                 $sql_value .= static::GetTable() . "." . $field->sql_assign($this->obj);
             }
@@ -306,14 +367,18 @@ class ModelDB extends ModelCore {
      * Carica l'oggetto dal db
      * 
      * @param array(string) $array_include
-     * 
+     * è un array di nomi di parametri (di tipo OGGETTO)
+     * indicano che quell'oggetto deve anche essere caricato dal db
+     * p.e.
+     * $customerDB->getCollection()->load("address")->where("id=4")->getData()
+     * Carica l'oggetto 
      * @global type $output
      * @global type $cnn
      */
     public function loadDB ( $array_include ) {
         global $output, $cnn;
   
-        $coll = $this->GetCollection()
+        $coll = $this->getCollection()
             ->where(static::GetTable().".".static::GetPrimaryKey()->sql_assign($this->obj));
         foreach ( $array_include as $i ) {
             $coll = $coll->load($i);
@@ -338,30 +403,29 @@ class ModelDB extends ModelCore {
      * @global type $output
      */
     public function updateDB () {
-        global $cnn, $output;
-      
         $sql = "";
+        
+        // Se la chiave primaria è vuota vuol dire che il modello deve essere inserito nel DB
         if ( static::GetPrimaryKey()->void($this->obj) ) {
+            $this->beginQuery(ModelDB::QUERY_TYPE_INSERT);
+            
             $sql = "INSERT INTO " . static::GetTable()
                 . " ( " . $this->getFieldsName2() . " ) "
                 . "VALUES"
                 . " ( " . $this->getFieldsValue() . " ) ";
-            $output->debug .= $sql."\n\r";
-            if ( $cnn->query($sql) == FALSE ) {
-                throw new Exception("sql:insert:modeldb");
-            }
-            static::GetPrimaryKey()->set($this->obj, $cnn->insert_id);
-            
+
+        // altrimenti vuol dire che il record è gia' presente nell db quindi faccio l'update
         } else {
+            $this->beginQuery(ModelDB::QUERY_TYPE_UPDATE);
+            
             $sql = "UPDATE " . static::GetTable()
                 . " SET "
-                . $this->getFieldsAssign()
+                . $this->getFieldsAssign2(",")
                 . " WHERE "
                 . static::GetPrimaryKey()->sql_assign($this->obj);
-            $output->debug .= $sql."\n\r";
-            $cnn->query($sql);
         }
         
+        $this->endQuery($sql);
     }
     
     /**
@@ -370,24 +434,69 @@ class ModelDB extends ModelCore {
      * @global type $output
      * @global type $cnn
      */
-    public function deleteDB () {
-        global $output, $cnn;
+    public function delete () {
+        $this->beginQuery(ModelDB::QUERY_TYPE_DELETE);
         
         $sql = "DELETE FROM " . static::GetTable()
             . " WHERE " 
             . static::GetPrimaryKey()->sql_assign($this->obj);
         
-        $output->debug .= $sql."\n\r";
-        
-        $cnn->query($sql);
+        $this->endQuery($sql);
     }
     
     // METHODS //
     
+    
+    
+    // EXECUTOR QUERY METHODS //
+    
+    /**
+     * Inizializza la procedura di esecuzione della query
+     * @param type $type
+     */
+    public function beginQuery ( $type ) {
+        $this->queryType = $type;
+    }
+     
+    /**
+     * Esegue praticamente la stringa sql mandata applicando il risultato
+     * @param array $sql
+     * @throws Exception
+     */
+    public function endQuery ( $sql ) {
+        global $cnn, $output;
+        $output->debug .= $sql."|| ||";
+
+        $result = $cnn->query($sql);
+        
+        if ( $this->queryType == ModelDB::QUERY_TYPE_INSERT ) {
+            if ( $result == FALSE ) throw new Exception("modeldb::sql::insert");
+            static::GetPrimaryKey()->set($this->obj, $cnn->insert_id);
+            
+        } else if ( $this->queryType == ModelDB::QUERY_TYPE_UPDATE ) {
+            if ( $result == FALSE ) throw new Exception("modeldb::sql::update");
+            
+        } else if ( $this->queryType == ModelDB::QUERY_TYPE_DELETE ) {
+            if ( $result == FALSE ) throw new Exception("modeldb::sql::delete");
+            return $cnn->affected_rows;
+            
+        } else if ( $this->queryType == ModelDB::QUERY_TYPE_SELECT ) {
+            if ( $result == FALSE ) throw new Exception("modeldb::sql::select");
+            $data = array();
+            
+            // creo l'istanza dell'oggetto e assegno i valori prelevati dal db
+            $class_name = static::GetClassName();
+            while ($d = $result->fetch_assoc()) {
+                $obj = new $class_name;
+                $obj->db->setFromResultset ( $d );
+                $data[] = $obj;
+            }
+            
+            $result->free();
+            return $data;
+        }
+    }
+    
+    // PRIVATE METHODS //
+    
 }
-
-
-
-
-
-

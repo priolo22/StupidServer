@@ -14,6 +14,9 @@ class ServiceDB extends ModelDB {
                 ,new Field("currentPosition","current_position",  Field::TYPE_INT)
                 ,new Field("lastPosition","last_position",  Field::TYPE_INT)
                 ,new Field("clientAdmin","id_client_admin",  Field::TYPE_OBJECT, "Client" )
+                ,new Field("dateCreation","date_creation",  Field::TYPE_TIMESTAMP_CREATION )
+                ,new Field("workTimeTotal","work_time_total",  Field::TYPE_INT )
+                ,new Field("workCustomersServed","work_customers_served",  Field::TYPE_INT )
             );
         }
         return ServiceDB::$Fields;
@@ -59,6 +62,12 @@ class Service {
     public $lastPosition;
 
     public $clientAdmin;
+    
+    public $dateCreation;
+    
+    public $workTimeTotal;
+    
+    public $workCustomersServed;
     
     
     public $db;

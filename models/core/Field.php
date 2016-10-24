@@ -11,12 +11,14 @@ class Field {
     const TYPE_BOOL = 2;
     const TYPE_STRING = 3;
     const TYPE_FLOAT = 4;
-    const TYPE_DATE = 5;
-    const TYPE_HTML = 6;
-    const TYPE_NOTHING = 7;
     
-    const TYPE_OBJECT = 8;
-    const TYPE_ARRAY = 9;
+    const TYPE_DATE = 5;
+    const TYPE_TIMESTAMP = 6;
+    const TYPE_TIMESTAMP_CREATION = 7;
+    const TYPE_HTML = 8;
+    const TYPE_NOTHING = 9;
+    const TYPE_OBJECT = 10;
+    const TYPE_ARRAY = 11;
     
     /**
      * nome delle proprietà dell'oggetto gestito "$obj"
@@ -72,7 +74,8 @@ class Field {
      * @return mixed 
      * */
     public function sql_value ( $obj ) {
-        if ( $this->type == self::TYPE_STRING) {
+        
+        if ( $this->type == self::TYPE_STRING || $this->type==self::TYPE_TIMESTAMP ) {
             return "\"" . $this->get($obj) . "\"";
             
         } else if ( $this->type == self::TYPE_OBJECT) {

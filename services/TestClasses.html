@@ -21,6 +21,7 @@
             <option value="100">dispatcher.php?url=service.ee.queue.register</option>
             <option value="101">dispatcher.php?url=service.ee.queue.unregister</option>
             <option value="102">dispatcher.php?url=service.ee.queue.push</option>
+            <option value="103">dispatcher.php?url=service.ee.destroy</option>
              
             <option>--- Service Client ---</option>
             <option value="0">dispatcher.php?url=select/ServiceClientDB</option>
@@ -99,6 +100,9 @@
                         case "101":
                         break;
                         case "102":
+                        break;
+                        case "103":
+                            $("#txtInput").val('{"service":55}');
                         break;
                         
                         

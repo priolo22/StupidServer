@@ -13,12 +13,6 @@
 class Collection {
     
     /**
-     * dati ricavati dall'SQL
-     * @var type 
-     */
-    private $data;
-    
-    /**
      * ModelDB da utilizzare per ricavare i i Field
      * @var type 
      */
@@ -44,45 +38,39 @@ class Collection {
 
     
     /**
-     * Restituisce il risultato in un array di oggetti
+     * Restituisce il risultato di una SELECT in un array di oggetti
      * @return \array
      */
     public function getData() {
-        $this->execute();
-        return $this->data;
+        $m = $this->control;
+        $m->beginQuery(ModelDB::QUERY_TYPE_SELECT);
+        $sql = $this->sqlSelect();
+        return $m->endQuery($sql);
     }
     
     /**
-     * Restituisce il risultato in forma di array associativi
+     * Restituisce il risultato di una SELECT in forma di array associativi
      * @return type
      */
     public function getArray() {
-        $this->execute();
-        
+        $data = $this->getData();
         $d = array();
-        foreach ( $this->data as $item ) {
+        foreach ( $data as $item ) {
             $d[] = $item->db->get();
         }
-        
         return $d;
     }
     
     
     /**
      * Elimina tutti gli elementi della collection
-     * ATTENZIONE: non elimina gli oggetti collegati
+     * Elimina anche tutti gli elementi "include"
      */
     public function delete() {
-        global $output, $cnn;
-        
+        $m = $this->control;
+        $m->beginQuery(ModelDB::QUERY_TYPE_DELETE);
         $sql = $this->sqlDelete();
-        $output->debug .= $sql."\n\r";
-
-        if ($result = $cnn->query($sql)) {
-            return $cnn->affected_rows;
-        } else {
-            throw new Exception ("Collection::delete");
-        }
+        return $m->endQuery($sql);
     }
     
     
@@ -96,41 +84,7 @@ class Collection {
     
     
     
-    /**
-     * Esegue la query SELECT e restituisce un array di oggetti
-     * 
-     * @global type $output
-     * @global type $cnn
-     * @return \Collection
-     */
-    private function execute() {
-        global $output, $cnn;
-
-        // se il data non è stato ancora caricato allora crea l'sql e lo esegue.
-        if ( !$this->data ) {
-
-            $this->data = array();
-            $m = $this->control;
-            $sql = $this->sqlSelect();
-
-            $output->debug .= $sql."\n\r";
-            
-            // creo l'istanza dell'oggetto e assegno i valori prelevati dal db
-            if ($result = $cnn->query($sql)) {
-                $class_name = $m::GetClassName();
-                while ($d = $result->fetch_assoc()) {
-                    $obj = new $class_name;
-                    $obj->db->setFromResultset ( $d );
-                    $this->data[] = $obj;
-                }
-                $result->free();
-            } else {
-                throw new Exception ("Collection::execute");
-            }
-
-        }
-        return $this;
-    }
+    
     
     /**
      * Crea la stringa del comando SQL
@@ -141,7 +95,14 @@ class Collection {
         
         // SELECT ----------------------
         $sql = "SELECT ";
+        
+        // inserisco i campi di questa tabella da selezionare
+        // (p.e.) ... table.prop1 as 'prop1', table.prop2 as 'prop2', table.prop3 as 'prop3', ...
         $sql .= $m::GetFieldsNameForSelect();
+        
+//[II] ATTENZIONE!!! qua si suppone che il class model sia il nome della classe + "DB" cosa che potrebbe anche non essere vera        
+        // inserisco anche i campi delle tabelle che carico con le join
+        // (p.e.) ... customer.name as 'curstomer.name', messages.id as 'message.id', ...
         foreach ( $this->sql_load as $field_name ) {
             $field = $m::GetField($field_name);
             if ( $field->type == Field::TYPE_OBJECT ) {
@@ -151,21 +112,8 @@ class Collection {
             }                
         }
 
-        // JOIN ------------------------
-        $sql .= " FROM " . $m::GetTable();
-
-        foreach ( $this->sql_load as $field_name ) {
-            $field = $m::GetField($field_name);
-            if ( $field->type == Field::TYPE_OBJECT ) {
-                $class_model = $field->class . "DB";
-                $field_model = new $class_model();
-                $sql .= " INNER JOIN " . $field_model::GetTable() 
-                        . " ON " 
-                        . $m::GetTable() .".". $field->name 
-                        . "="
-                        . $field_model::GetTable() .".". $field_model::GetPrimaryKey()->name;
-            }
-        }
+        // (p.e) ... FROM table ...
+        $sql .= " FROM " . $this->getJoin();
 
         // WHERE -----------------------
         if ( !empty($this->sql_where) ) {
@@ -176,18 +124,26 @@ class Collection {
     }
     
     
-    
     /**
      * Crea una string sql che esegue il delete su db dell'oggetto specificato
-     * ATTENZIONE: non esegue la cancellazione degli oggetti collegati.
      * 
+     * (p.e.)
+DELETE 
+    service_client,services
+FROM
+    service_client 
+    INNER JOIN services ON service_client.id_service=services.id 
+WHERE 
+    service_client.id_service=67
+
      * @return string
      */
     private function sqlDelete() {
         $m = $this->control;
         
-        $sql = "DELETE";
-        $sql .= " FROM " . $m::GetTable();
+        $sql = "DELETE ";
+        $sql .= $this->getAllTables();
+        $sql .= " FROM " . $this->getJoin();
         
         // WHERE -----------------------
         if ( !empty($this->sql_where) ) {
@@ -198,8 +154,99 @@ class Collection {
     }
     
     
+    /**
+     * Restituisce la lista di tutte le tabelle coinvolte
+     * (p.e.) customers,address,messages ...
+     * 
+     * divisorio da utilizzare tra un nome e l'altro (di default ',')
+     * @param string $div
+     * 
+     * @return string
+     */
+    private function getAllTables($div=",") {
+        $m = $this->control;
+        $sql = $m::GetTable();
+        
+        foreach ( $this->sql_load as $field_name ) {
+            $field = $m::GetField($field_name);
+            if ( $field->type == Field::TYPE_OBJECT ) {
+// ATTENZIONE DA CORREGGERE                
+                $class_modelDB = $field->class . "DB";
+                $field_modelDB = new $class_modelDB();
+                $sql .=  $div . $field_modelDB::GetTable();
+            }                
+        }
+        
+        return $sql;
+    }
     
     
+    /**
+     * Prelevo la stringa JOIN di questa collection. 
+     * Questa stringa tiene conto del campo "sql_include". Questo campo contiene tutti i "fields OGGETTO" da prendere in considerazione per la JOINT
+     * Quindi se il "fields OGGETTO" è settato vado a prendere il controller della sua classe e prelevo i dati per costruire la joint
+     * 
+     * (p.e.) table1 INNER JOIN customers ON table1.customer_id=customers.id INNER JOIN messages ON table1.message_id=messages.id ...
+     * 
+     * @return string
+     */
+    private function getJoin () {
+        $m = $this->control;
+        $sql = $m::GetTable();
+
+        // ciclo tutti i "field" di questo oggetto che devono essere legati alla JOIN
+        foreach ( $this->sql_load as $field_name ) {
+            
+            // se si tratta di un campo OGGETTO
+            $field = $m::GetField($field_name);
+            if ( $field->type == Field::TYPE_OBJECT ) {
+                
+// [II] ATTENZIONE!! Qua si da per scontato che il controller del modello si chiami come la classe del modello +"DB" ma questo non è detto.
+                // prelevo il controller dell'oggetto collegato a questo "field"
+                $class_cnt = $field->class . "DB";
+                $cnt = new $class_cnt();
+                $sql .= " INNER JOIN " . $cnt::GetTable() 
+                    . " ON " 
+                    . $m::GetTable() .".". $field->name 
+                    . "="
+                    . $cnt::GetTable() .".". $cnt::GetPrimaryKey()->name;
+            }
+        }    
+        
+        return $sql;
+    }
+            
+
+    /**
+     * Restituisce, ciclando tutti i field include, per ogniuno tutti i campi della tabella associata
+     * associa pure un alias che sara' utile quando devo analizzare il risultato in select
+     * 
+     * (p.e.) ... 
+     * customer.name as 'curstomer.name', customer.surname as 'curstomer.surname', customer.address as 'curstomer.address'
+     * , messages.id as 'message.id', messages.body as 'message.body'  
+     * ...
+     * 
+     * @return string
+     */
+    private function includedFields() {
+        $m = $this->control;
+        $sql = "";
+        
+        //[II] ATTENZIONE!!! qua si suppone che il class model sia il nome della classe + "DB" cosa che potrebbe anche non essere vera        
+        foreach ( $this->sql_load as $field_name ) {
+            $field = $m::GetField($field_name);
+            if ( $field->type == Field::TYPE_OBJECT ) {
+                $class_modelDB = $field->class . "DB";
+                $field_modelDB = new $class_modelDB();
+                $sql .=  ",". $field_modelDB::GetFieldsNameForSelect($field->propertyName);
+            }                
+        }
+        
+        return $sql;
+    }
+            
+            
+            
     // WHERE //
     
     /**
@@ -215,7 +262,7 @@ class Collection {
 
     /**
      * Specificando una proprietà come parametro inserisce
-     * nella clausola "where" il fatto che quella proprieta' deve essere corrispondente.
+     * nella clausola "where" il fatto che quella proprieta' deve essere corrispondente alla proprietà del modello.
      * 
      * @param string $prop
      * @return \Collection
@@ -227,9 +274,11 @@ class Collection {
         $field = $m::GetField($prop);
         // se la proprietà è settata ...
         if ( $field!=NULL && $field->is_set($m->getModel()) ) {
-            // ricavo la sua stringa sql di assegnazione (p.e. nome="pippo") 
+            // ricavo la sua stringa sql di assegnazione (p.e. name="pippo") 
+            // inserisco anche il nome della tabella (p.e. clients.name="pippo"
             // e la inserisco nella clausola where
-            $sql = $field->sql_assign($m->getModel());
+            $sql = $m::GetTable() .".". $field->sql_assign($m->getModel());
+            //$sql = $field->sql_assign($m->getModel());
             if ( empty($this->sql_where) ) {
                 $this->sql_where .= $sql;
             } else {
@@ -241,12 +290,14 @@ class Collection {
     
     /**
      * Inserisce nella clausola WHERE tutte le proprietà di questo oggetto SETTATE
+     * 
+     * @param array $fields_to_get indica i campi che devono essere considerati, se null o vuota considera tutti i campi.
      * @return \Collection
      */
-    public function similar () {
+    public function similar ($fields_to_get) {
         $m = $this->control;
         
-        $sql = $m->getFieldsAssign2( " AND " );
+        $sql = $m->getFieldsAssign2( " AND ", $fields_to_get );
         
         if ( empty($this->sql_where) ) {
             $this->sql_where .= $sql;
@@ -260,6 +311,8 @@ class Collection {
     // WHERE //
     
     
+    
+    
     /**
      * I parametro indicato deve essere caricato
      * per esempio:
@@ -270,6 +323,7 @@ class Collection {
      * 
      * @param type $param
      */
+//[II] ATTENZIONE!! cambiare in "include"
     public function load ( $param ) {
         if ( !in_array($param, $this->sql_load) ) {
             $this->sql_load[] = $param;
@@ -277,5 +331,17 @@ class Collection {
         return $this;
     }
     
+    /**
+     * 
+     * @param type $fnc_item
+     * @return \Collection
+     */
+    public function each ( $fnc_item ) {
+        $data = $this->getData();
+        foreach ( $data as $item ) {
+            $fnc_item ( $item );
+        }
+        return $this;
+    }
     
 }

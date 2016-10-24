@@ -1,5 +1,5 @@
 <?php
-require_once '../services/db_connection.php';
+require_once '../services/ConnectionDB.php';
 require_once 'Output.php';
 
 function begin_session_helper () {
@@ -20,5 +20,12 @@ function begin_session_helper () {
 function end_session_helper () {
     global $cnn, $output;
     $cnn->close();
+    
+    if ( $output->type=="ok" ) {
+        http_response_code(200);
+    } else {
+        http_response_code(500);
+    }
+    
     echo $output->toJson();
 }

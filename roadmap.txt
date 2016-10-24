@@ -1,0 +1,15 @@
+definire pseudocodice per inviare comandi al db da client
+
+for ( <array>, <item> ) {
+}
+
+if ( <condizione> ) {
+}
+
+array () {
+  <item>,
+  <item>
+}
+
+
+gestire i forekey e i timestamp
